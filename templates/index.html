@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Handwritten Digit Recognition</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: #f8fafc; margin: 0; padding: 30px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { color: #818cf8; margin-bottom: 6px; }
+        .subtitle { color: #94a3b8; margin-bottom: 24px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .card { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 24px; }
+        canvas { background: #000; border: 2px solid #374151; border-radius: 10px; cursor: crosshair; display: block; margin: 0 auto 16px auto; }
+        .btn-row { display: flex; gap: 12px; }
+        button { flex: 1; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; border: none; }
+        .btn-clear { background: #1e293b; color: #cbd5e1; }
+        .btn-pred { background: #6366f1; color: #fff; }
+        .btn-pred:hover { background: #4f46e5; }
+        .res-box { background: #1e293b; border-radius: 10px; padding: 18px; text-align: center; margin-bottom: 20px; }
+        .pred-num { font-size: 54px; font-weight: 900; color: #38bdf8; }
+        .prob-bar { display: flex; align-items: center; margin-bottom: 6px; font-size: 13px; color: #cbd5e1; }
+        .bar-bg { flex: 1; height: 10px; background: #0f172a; border-radius: 5px; margin: 0 10px; overflow: hidden; }
+        .bar-fill { height: 100%; background: #6366f1; width: 0%; transition: width 0.3s; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✏️ Handwritten Digit Recognition (MNIST CNN)</h1>
+        <p class="subtitle">Draw any digit from 0 to 9 on the interactive canvas for real-time neural network inference</p>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Drawing Canvas</h2>
+                <canvas id="digitCanvas" width="280" height="280"></canvas>
+                <div class="btn-row">
+                    <button class="btn-clear" onclick="clearCanvas()">Clear Canvas</button>
+                    <button class="btn-pred" onclick="predictDigit()">⚡ Classify Digit</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Neural Network Classification</h2>
+                <div class="res-box">
+                    <div style="color:#94a3b8; font-size:13px;">PREDICTED DIGIT</div>
+                    <div class="pred-num" id="predVal">-</div>
+                    <div id="confVal" style="color:#10b981; font-weight:bold;">Draw a digit and click Classify</div>
+                </div>
+
+                <h3>Softmax Class Distribution</h3>
+                <div id="distContainer">
+                    <!-- Dynamic probabilities -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('digitCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 18;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        let drawing = false;
+        canvas.addEventListener('mousedown', () => drawing = true);
+        window.addEventListener('mouseup', () => drawing = false);
+        canvas.addEventListener('mousemove', draw);
+
+        function draw(e) {
+            if (!drawing) return;
+            const rect = canvas.getBoundingClientRect();
+            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            document.getElementById('predVal').innerText = '-';
+            document.getElementById('confVal').innerText = 'Draw a digit and click Classify';
+            document.getElementById('distContainer').innerHTML = '';
+        }
+
+        async function predictDigit() {
+            const dataUrl = canvas.toDataURL('image/png');
+            const res = await fetch('/predict', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({image: dataUrl})
+            });
+            const data = await res.json();
+            document.getElementById('predVal').innerText = data.prediction;
+            document.getElementById('confVal').innerText = data.confidence + '% Confidence';
+
+            const container = document.getElementById('distContainer');
+            container.innerHTML = '';
+            data.distribution.forEach(d => {
+                const isWinner = d.digit === data.prediction;
+                const row = document.createElement('div');
+                row.className = 'prob-bar';
+                row.innerHTML = `
+                    <span style="width:20px; font-weight:${isWinner ? 'bold' : 'normal'}; color:${isWinner ? '#38bdf8' : '#cbd5e1'}">${d.digit}</span>
+                    <div class="bar-bg">
+                        <div class="bar-fill" style="width:${d.prob}%; background:${isWinner ? '#38bdf8' : '#6366f1'}"></div>
+                    </div>
+                    <span style="width:45px; text-align:right;">${d.prob}%</span>
+                `;
+                container.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
